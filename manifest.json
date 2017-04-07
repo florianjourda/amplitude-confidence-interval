@@ -1,0 +1,44 @@
+{
+    "name": "Confidence Interval on Amplitude Funnels",
+    "version": "0.0.1",
+    "manifest_version": 2,
+    "description": "Draw confidence intervals on funnels in Amplitude",
+    "homepage_url": "http://amplitude.com",
+    "icons": {
+      "128": "icons/128x128.png",
+      "16": "icons/16x16.png",
+      "32": "icons/32x32.png",
+      "48": "icons/48x48.png"
+    },
+    "default_locale": "en",
+    "background": {
+        "scripts": [
+            "lib/jquery/jquery-3.2.0.min.js",
+            "src/options/lib/store.js",
+            "src/background/icon-manager.js",
+            "src/background/background.js"
+        ],
+        "persistent": false
+    },
+    "options_page": "src/options/index.html",
+    "page_action": {},
+    "permissions": [
+        "contentSettings",
+        "http://l.facebook.com/*",
+        "https://www.eventbriteapi.com/*",
+        "https://www.eventbrite.com/*",
+        "http://www.eventbrite.com/*",
+        "https://analytics.amplitude.com/*"
+    ],
+    "content_scripts": [
+        {
+            "matches": [
+                "https://analytics.amplitude.com/*"
+            ],
+            "js": [
+                "lib/jquery/jquery-3.2.0.min.js",
+                "src/content/content.js"
+            ]
+        }
+    ]
+}
