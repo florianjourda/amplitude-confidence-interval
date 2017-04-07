@@ -29,7 +29,7 @@ $j(function() {
     $j('body').bind('DOMNodeInserted', function(e) {
         if (isFunnelGroup(e.target)) {
             clearTimeout(timeoutId);
-            timeoutId = setTimeout(drawConfidenceIntervalOnFunnelGroup, 1);
+            timeoutId = setTimeout(calculateAndDrawConfidenceIntervals, 100);
         }
     });
 });
@@ -43,16 +43,61 @@ function isFunnelGroup(element) {
     return $j(element).is('g.highcharts-series');
 }
 
-function drawConfidenceIntervalOnFunnelGroup() {
-    var jFunnelGroup = $j('g.highcharts-series.highcharts-series-1.highcharts-tracker'),
-        jDataLabelsGroup = $j('g.highcharts-data-labels.highcharts-series-1.highcharts-tracker'),
-        jFunnelParentSVG = $j(jFunnelGroup.attr('clip-path').match(/url\((.*)\)/)[1]).parents('svg');
-    //jFunnelParentSVG.parent().html(jFunnelParentSVG.parent().html());
-    // $j("body").html($j("body").html());
-    var funnelValues = getFunnelValues(jDataLabelsGroup);
-    console.log('Found funnel', jFunnelGroup.get(0), 'with values', funnelValues);
+function calculateAndDrawConfidenceIntervals() {
+    var jDataLabelsGroup = $j('g.highcharts-data-labels.highcharts-series-1.highcharts-tracker'),
+        funnelValues = getFunnelValues(jDataLabelsGroup),
+        confidenceIntervals = getConfidenceIntervals(funnelValues),
+        jFunnelGroup = $j('g.highcharts-series.highcharts-series-1.highcharts-tracker');
+    console.log('Found funnel', jFunnelGroup.get(0), 'with values', funnelValues, 'and intervals', confidenceIntervals);
+    drawConfidenceIntervals(confidenceIntervals, jFunnelGroup);
 }
 
 function getFunnelValues(jDataLabelsGroup) {
     return jDataLabelsGroup.find('tspan').map(function(){return this.innerHTML}).toArray();
+}
+
+function getConfidenceIntervals(funnelValues) {
+    // First value is the total number of the population.
+    var N = funnelValues[0],
+        confidenceIntervals = [];
+    for (var i = 1; i < funnelValues.length; i++) {
+        var S = funnelValues[i],
+            confidenceInterval = wilsonInterval(S, N, confidencePercentage / 100);
+        confidenceIntervals.push(confidenceInterval);
+    }
+    return confidenceIntervals;
+}
+
+function drawConfidenceIntervals(confidenceIntervals, jFunnelGroup) {
+    var jRects = jFunnelGroup.children(),
+        baseJRect = jRects.first(),
+        nextJRects = jRects.slice(1),
+        baseY = parseFloat(baseJRect.attr('y')),
+        baseHeight = parseFloat(baseJRect.attr('height')),
+        baseWidth = parseFloat(baseJRect.attr('width'));
+    nextJRects.each(function(i) {
+        var jRect = $j(this);
+            newJRect = jRect.clone(),
+            confidenceInterval = confidenceIntervals[i],
+            y1 = baseY + (1 - confidenceInterval.high) * baseHeight,
+            y2 = baseY + (1 - confidenceInterval.low) * baseHeight,
+            centerX = parseFloat(jRect.attr('x')) + baseWidth / 2,
+            width = baseWidth / 2,
+            x1 = centerX - width / 2,
+            x2 = centerX + width / 2;
+        newJRect.attr({
+            'x': x1,
+            'y': y1,
+            'width': x2 - x1,
+            'height': y2 - y1,
+            'fill': shadeColor2(jRect.attr('fill'), -0.2),
+        });
+        jRect.after(newJRect);
+    });
+}
+
+// http://stackoverflow.com/questions/5560248/programmatically-lighten-or-darken-a-hex-color-or-rgb-and-blend-colors
+function shadeColor2(color, percent) {
+    var f=parseInt(color.slice(1),16),t=percent<0?0:255,p=percent<0?percent*-1:percent,R=f>>16,G=f>>8&0x00FF,B=f&0x0000FF;
+    return "#"+(0x1000000+(Math.round((t-R)*p)+R)*0x10000+(Math.round((t-G)*p)+G)*0x100+(Math.round((t-B)*p)+B)).toString(16).slice(1);
 }

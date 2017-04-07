@@ -37,6 +37,7 @@
             ],
             "js": [
                 "lib/jquery/jquery-3.2.0.min.js",
+                "lib/wilson-interval/wilson-interval.js",
                 "src/content/content.js"
             ]
         }
