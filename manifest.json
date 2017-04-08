@@ -10,11 +10,8 @@
       "32": "icons/32x32.png",
       "48": "icons/48x48.png"
     },
-    "default_locale": "en",
     "background": {
         "scripts": [
-            "lib/jquery/jquery-3.2.0.min.js",
-            "src/background/icon-manager.js",
             "src/background/background.js"
         ],
         "persistent": false

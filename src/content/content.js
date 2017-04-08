@@ -15,23 +15,20 @@ var FUNNEL_CONVERSION_TEXT_REGEX = /^(\d+\.?\d?)% \((\d+) of (\d+)\)/,
     wasDOMNodeInsertedSinceLastCheck = false,
     $j = jQuery.noConflict();
 
-// Ask settings to the background
-chrome.extension.sendMessage({status:'getSettings'}, function(response) {
-    console.log('response', response);
-    confidenceLevel = response.confidenceLevel;
-});
-
 // Run script when page is loaded
 $j(function() {
-    console.log('Starting Amplitude Confidence Interval script.');
-
     if (!isFunnelPage()) {
-        console.log('Not a funnel page. Stopping.');
         return;
     }
 
-    console.log('This is a funnel page. Adding listener to the funnel svg.');
-    // TODO: check that this test doesnot slow down the UI too much
+    // Ask settings to the background
+    chrome.extension.sendMessage({status:'getSettings'}, function(response) {
+        confidenceLevel = response.confidenceLevel;
+        console.log('Will add confidence interval with confidence level of ' +
+            confidenceLevel + '% to Amplitude funnels');
+    });
+
+    // TODO: check that this test does not slow down the UI too much
     $j('body').bind('DOMNodeInserted', function(e) {
         var tagName = e.target.tagName;
 

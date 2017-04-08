@@ -1,10 +1,7 @@
 # Airtable LinkedIn Contact Importer
 
-This is a Chrome Extension that runs on the LinkedIn profile pages and allows to import some of the profile data to a given 'Contacts' table on [Airtable](http://www.airtable.com).
-
-I have built this because LinkedIn has closed their API (not cool!) and decided to switch to [Airtable](http://www.airtable.com) to manage my contact list (personal CRM).
-
-This an alpha version and requires a specific field format in the Contacts table. So it's unlikely you can use it just out of the box :)
+This is a Chrome Extension that runs on Amplitude.com funnel pages and draws confidence interval to the funnels.
+The confidence level (95% by default) can be customized.
 
 ![Demo](demo.gif)
 
@@ -14,7 +11,4 @@ To load the extension:
 * Click 'Load unpacked...' and pick the cloned directory
 
 Credits:
-* Chrome Extension code structure created with [Extensionizr](http://extensionizr.com).
-* Scraping done with [Artoo](https://medialab.github.io/artoo)
 * GIF created with [LiceCap](http://www.cockos.com/licecap/).
-

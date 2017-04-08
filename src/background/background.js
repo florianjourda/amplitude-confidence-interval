@@ -1,11 +1,9 @@
 /**
  * @fileoverview This is the code that runs in the background, as one instance for all Chrome tabs.
  *
- * This can communicate with the 'content.js' script that runs on each page matching https://www.linkedin.com/*"
- *
- * Note that we need to keep track of the state data from each tab separately.
+ * This can communicate with the 'content.js' script that runs on each page
+ * matching "https://analytics.amplitude.com/*".
  */
-var iconBackgroundImageSrc = 'icons/32x32.png';
 
 /**
  * Listen to the content script
