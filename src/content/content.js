@@ -6,7 +6,6 @@
  */
 
 var confidencePercentage,
-    jFunnelGroup;
     timeoutId = null;
 
 // Ask settings to the background
@@ -27,7 +26,8 @@ $j(function() {
 
     console.log('This is a funnel page. Adding listener to the funnel svg.');
     $j('body').bind('DOMNodeInserted', function(e) {
-        if (isFunnelGroup(e.target)) {
+        // TODO: check that this test doesnot slow down the UI too much
+        if (isSeriesGroup(e.target)) {
             clearTimeout(timeoutId);
             timeoutId = setTimeout(calculateAndDrawConfidenceIntervals, 100);
         }
@@ -39,37 +39,55 @@ function isFunnelPage() {
     return true;
 }
 
-function isFunnelGroup(element) {
+function isSeriesGroup(element) {
     return $j(element).is('g.highcharts-series');
 }
-
+var a, b, c;
 function calculateAndDrawConfidenceIntervals() {
-    var jDataLabelsGroup = $j('g.highcharts-data-labels.highcharts-series-1.highcharts-tracker'),
-        funnelValues = getFunnelValues(jDataLabelsGroup),
-        confidenceIntervals = getConfidenceIntervals(funnelValues),
-        jFunnelGroup = $j('g.highcharts-series.highcharts-series-1.highcharts-tracker');
-    console.log('Found funnel', jFunnelGroup.get(0), 'with values', funnelValues, 'and intervals', confidenceIntervals);
-    drawConfidenceIntervals(confidenceIntervals, jFunnelGroup);
+    a = null;
+    b = null;
+    c = null;
+    console.log('calculateAndDrawConfidenceIntervals');
+    valuesForEachSeries = getValuesForEachSeries();
+    $j.each(valuesForEachSeries, function(seriesIndex, seriesValues) {
+        var jSeriesGroup = $j('g.highcharts-series.highcharts-series-' + seriesIndex + '.highcharts-tracker');
+            confidenceIntervals = getConfidenceIntervals(seriesValues),
+            //console.log('Found series', jSeriesGroup.get(0), 'with values', seriesValues, 'and intervals', confidenceIntervals);
+        drawConfidenceIntervals(confidenceIntervals, jSeriesGroup);
+    });
 }
 
-function getFunnelValues(jDataLabelsGroup) {
+function getValuesForEachSeries() {
+    var jDataLabelsGroups = $j('g.highcharts-data-labels.highcharts-tracker'),
+        valuesForEachSeries = {};
+    jDataLabelsGroups.each(function() {
+        var jDataLabelsGroup = $j(this),
+            seriesIndex = jDataLabelsGroup.attr('class').match(/highcharts-data-labels highcharts-series-([0-9]+) highcharts-tracker/)[1],
+            seriesValues = getSeriesValues(jDataLabelsGroup);
+        valuesForEachSeries[seriesIndex] = seriesValues;
+    });
+    return valuesForEachSeries;
+}
+
+function getSeriesValues(jDataLabelsGroup) {
+    c = c || jDataLabelsGroup.find('tspan').slice(1).first();
     return jDataLabelsGroup.find('tspan').map(function(){return this.innerHTML}).toArray();
 }
 
-function getConfidenceIntervals(funnelValues) {
+function getConfidenceIntervals(seriesValues) {
     // First value is the total number of the population.
-    var N = funnelValues[0],
+    var N = seriesValues[0],
         confidenceIntervals = [];
-    for (var i = 1; i < funnelValues.length; i++) {
-        var S = funnelValues[i],
+    for (var i = 1; i < seriesValues.length; i++) {
+        var S = seriesValues[i],
             confidenceInterval = wilsonInterval(S, N, confidencePercentage / 100);
         confidenceIntervals.push(confidenceInterval);
     }
     return confidenceIntervals;
 }
 
-function drawConfidenceIntervals(confidenceIntervals, jFunnelGroup) {
-    var jRects = jFunnelGroup.children(),
+function drawConfidenceIntervals(confidenceIntervals, jSeriesGroup) {
+    var jRects = jSeriesGroup.children(),
         baseJRect = jRects.first(),
         nextJRects = jRects.slice(1),
         baseY = parseFloat(baseJRect.attr('y')),
@@ -93,6 +111,8 @@ function drawConfidenceIntervals(confidenceIntervals, jFunnelGroup) {
             'fill': shadeColor2(jRect.attr('fill'), -0.2),
         });
         jRect.after(newJRect);
+        a = a || jRect;
+        b = b || newJRect;
     });
 }
 
