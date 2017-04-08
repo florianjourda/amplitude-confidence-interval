@@ -5,8 +5,13 @@
  * In manifest.json, we declare that we want this code to run only on the pages matching "https://analytics.amplitude.com/*"
  */
 
-var confidencePercentage,
-    timeoutId = null;
+// Matches '100% (107 of 107)', '11.2% (12 of 107)'
+var FUNNEL_CONVERSION_TEXT_REGEX = /^(\d+\.?\d?)% \((\d+) of (\d+)\)/,
+// Matches '80', '80%', '80 %', '.8', '0.8'
+    PERCENTAGE_INPUT_REGEX = /^(\d+(\.\d+)?|\.\d+)\s*%?$/,
+    confidencePercentage,
+    timeoutId = null,
+    $j = jQuery.noConflict();
 
 // Ask settings to the background
 chrome.extension.sendMessage({status:'get_settings'}, function(response) {
@@ -15,7 +20,6 @@ chrome.extension.sendMessage({status:'get_settings'}, function(response) {
 });
 
 // Run script when page is loaded
-$j = jQuery.noConflict();
 $j(function() {
     console.log('Starting Amplitude Confidence Interval script.');
 
@@ -25,9 +29,21 @@ $j(function() {
     }
 
     console.log('This is a funnel page. Adding listener to the funnel svg.');
+    // TODO: check that this test doesnot slow down the UI too much
     $j('body').bind('DOMNodeInserted', function(e) {
-        // TODO: check that this test doesnot slow down the UI too much
-        if (isSeriesGroup(e.target)) {
+        var tagName = e.target.tagName;
+
+        // Check if popup with funnel conversion text was displayed
+        if (tagName === 'DIV') {
+            // TODO: do not do this on the first step of the funnel
+            var jB = $j(e.target).find('b');
+            if (jB.length && isFunnelConversionPopupText(jB)) {
+                updateAndKeepUpdatedFunnelConversionPopupText(jB);
+            }
+        }
+
+        // Check if funnel was drawn in SVG
+        if (tagName === 'g' && isSeriesGroup(e.target)) {
             clearTimeout(timeoutId);
             timeoutId = setTimeout(calculateAndDrawConfidenceIntervals, 100);
         }
@@ -42,6 +58,71 @@ function isFunnelPage() {
 function isSeriesGroup(element) {
     return $j(element).is('g.highcharts-series');
 }
+
+function isFunnelConversionPopupText(jB) {
+    return !!jB.text().match(FUNNEL_CONVERSION_TEXT_REGEX);
+}
+
+function updateAndKeepUpdatedFunnelConversionPopupText(jB) {
+    // We listen to future changes in the text to update it again
+    var DOMSubtreeModifiedHandler;
+    DOMSubtreeModifiedHandler = function() {
+        jB.off('DOMSubtreeModified', DOMSubtreeModifiedHandler)
+        // Avoid infinite recursion of subtree modification by doing the modification after
+        // the event listener really has the time to be removed.
+        setTimeout(function() {
+            updateFunnelConversionPopupText(jB);
+            jB.on('DOMSubtreeModified', DOMSubtreeModifiedHandler);
+        }, 1);
+    }
+    DOMSubtreeModifiedHandler();
+}
+
+function updateFunnelConversionPopupText(jB) {
+    matches = jB.text().match(FUNNEL_CONVERSION_TEXT_REGEX)
+    console.log(jB.text(), matches);
+    var firstLine = matches[0],
+        percent = parseFloat(matches[1]),
+        s = parseInt(matches[2], 10),
+        n = parseInt(matches[3], 10),
+        confidenceInterval = wilsonInterval(s, n, confidencePercentage / 100),
+        lowerBound = decimalRound(confidenceInterval.low * 100, 1),
+        higherBound = decimalRound(confidenceInterval.high * 100, 1);
+    jB.html(firstLine + '<br>' +
+        lowerBound + '% - ' + higherBound + '% ' +
+        '(at <a href="#" style="color:inherit">' + confidencePercentage + '%</a> confidence)');
+    jB.find('a').on('click', function(e) {
+        confidencePercentage = promptConfidencePercentage();
+        updateFunnelConversionPopupText(jB);
+        e.preventDefault();
+    });
+    return true;
+}
+
+function promptConfidencePercentage() {
+    var newConfidancePercentage = prompt('What confidence level do want to use for the confidence intervals ? (0% to 100%)', confidencePercentage),
+        match = null;
+    if (newConfidancePercentage !== null) {
+        match = newConfidancePercentage.match(PERCENTAGE_INPUT_REGEX);
+    }
+    if (!match) {
+        return confidencePercentage;
+    }
+    newConfidancePercentage = parseFloat(match[1]);
+    // Correct when user typed .5 instead of 50
+    if (newConfidancePercentage <= 1) {
+        newConfidancePercentage = 100 * newConfidancePercentage;
+    }
+    return newConfidancePercentage;
+}
+
+function decimalRound(number, precision) {
+    var factor = Math.pow(10, precision);
+    var tempNumber = number * factor;
+    var roundedTempNumber = Math.round(tempNumber);
+    return roundedTempNumber / factor;
+};
+
 var a, b, c;
 function calculateAndDrawConfidenceIntervals() {
     a = null;
@@ -76,11 +157,12 @@ function getSeriesValues(jDataLabelsGroup) {
 
 function getConfidenceIntervals(seriesValues) {
     // First value is the total number of the population.
-    var N = seriesValues[0],
+    var n = seriesValues[0],
         confidenceIntervals = [];
     for (var i = 1; i < seriesValues.length; i++) {
-        var S = seriesValues[i],
-            confidenceInterval = wilsonInterval(S, N, confidencePercentage / 100);
+        var s = seriesValues[i],
+            // TODO: deal with 100 confidencePercentage with return NaN
+            confidenceInterval = wilsonInterval(s, n, confidencePercentage / 100);
         confidenceIntervals.push(confidenceInterval);
     }
     return confidenceIntervals;
