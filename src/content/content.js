@@ -9,14 +9,16 @@
 var FUNNEL_CONVERSION_TEXT_REGEX = /^(\d+\.?\d?)% \((\d+) of (\d+)\)/,
 // Matches '80', '80%', '80 %', '.8', '0.8'
     PERCENTAGE_INPUT_REGEX = /^(\d+(\.\d+)?|\.\d+)\s*%?$/,
-    confidencePercentage,
+    confidenceLevel,
     timeoutId = null,
+    shouldCalculateAndDrawConfidenceIntervals = false,
+    wasDOMNodeInsertedSinceLastCheck = false,
     $j = jQuery.noConflict();
 
 // Ask settings to the background
-chrome.extension.sendMessage({status:'get_settings'}, function(response) {
+chrome.extension.sendMessage({status:'getSettings'}, function(response) {
     console.log('response', response);
-    confidencePercentage = response.confidencePercentage;
+    confidenceLevel = response.confidenceLevel;
 });
 
 // Run script when page is loaded
@@ -43,9 +45,9 @@ $j(function() {
         }
 
         // Check if funnel was drawn in SVG
+        wasDOMNodeInsertedSinceLastCheck = true;
         if (tagName === 'g' && isSeriesGroup(e.target)) {
-            clearTimeout(timeoutId);
-            timeoutId = setTimeout(calculateAndDrawConfidenceIntervals, 100);
+            calculateAndDrawConfidenceIntervalsWhenNoMoreDOMInsertion();
         }
     });
 });
@@ -80,40 +82,50 @@ function updateAndKeepUpdatedFunnelConversionPopupText(jB) {
 
 function updateFunnelConversionPopupText(jB) {
     matches = jB.text().match(FUNNEL_CONVERSION_TEXT_REGEX)
-    console.log(jB.text(), matches);
     var firstLine = matches[0],
         percent = parseFloat(matches[1]),
         s = parseInt(matches[2], 10),
         n = parseInt(matches[3], 10),
-        confidenceInterval = wilsonInterval(s, n, confidencePercentage / 100),
+        confidenceInterval = wilsonInterval(s, n, confidenceLevel / 100),
         lowerBound = decimalRound(confidenceInterval.low * 100, 1),
         higherBound = decimalRound(confidenceInterval.high * 100, 1);
     jB.html(firstLine + '<br>' +
         lowerBound + '% - ' + higherBound + '% ' +
-        '(at <a href="#" style="color:inherit">' + confidencePercentage + '%</a> confidence)');
+        '(at <a href="#" style="color:inherit">' + confidenceLevel + '%</a> confidence)');
     jB.find('a').on('click', function(e) {
-        confidencePercentage = promptConfidencePercentage();
+        confidenceLevel = promptConfidenceLevel();
+        storeConfidenceLevel(confidenceLevel);
         updateFunnelConversionPopupText(jB);
+        calculateAndDrawConfidenceIntervals();
         e.preventDefault();
     });
     return true;
 }
 
-function promptConfidencePercentage() {
-    var newConfidancePercentage = prompt('What confidence level do want to use for the confidence intervals ? (0% to 100%)', confidencePercentage),
+function promptConfidenceLevel() {
+    var newConfidenceLevel = prompt('What confidence level do want to use for the confidence intervals ? (0% to 100%)', confidenceLevel),
         match = null;
-    if (newConfidancePercentage !== null) {
-        match = newConfidancePercentage.match(PERCENTAGE_INPUT_REGEX);
+    if (newConfidenceLevel !== null) {
+        match = newConfidenceLevel.match(PERCENTAGE_INPUT_REGEX);
     }
     if (!match) {
-        return confidencePercentage;
+        return confidenceLevel;
     }
-    newConfidancePercentage = parseFloat(match[1]);
+    newConfidenceLevel = parseFloat(match[1]);
     // Correct when user typed .5 instead of 50
-    if (newConfidancePercentage <= 1) {
-        newConfidancePercentage = 100 * newConfidancePercentage;
+    if (newConfidenceLevel <= 1) {
+        newConfidenceLevel = 100 * newConfidenceLevel;
     }
-    return newConfidancePercentage;
+    return newConfidenceLevel;
+}
+
+function storeConfidenceLevel(confidenceLevel) {
+    chrome.extension.sendMessage({
+        status: 'storeConfidenceLevel',
+        confidenceLevel: confidenceLevel,
+    }, function(response) {
+        console.log('response', response);
+    });
 }
 
 function decimalRound(number, precision) {
@@ -123,12 +135,21 @@ function decimalRound(number, precision) {
     return roundedTempNumber / factor;
 };
 
-var a, b, c;
+function calculateAndDrawConfidenceIntervalsWhenNoMoreDOMInsertion() {
+    // Draw the interval is no more DOM insertion has been done recently (ie DOM is stable)
+    if (!wasDOMNodeInsertedSinceLastCheck) {
+        calculateAndDrawConfidenceIntervals();
+        return;
+    }
+    wasDOMNodeInsertedSinceLastCheck = false;
+
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(calculateAndDrawConfidenceIntervalsWhenNoMoreDOMInsertion, 100);
+}
+
 function calculateAndDrawConfidenceIntervals() {
-    a = null;
-    b = null;
-    c = null;
     console.log('calculateAndDrawConfidenceIntervals');
+    removePreviousConfidenceIntervals();
     valuesForEachSeries = getValuesForEachSeries();
     $j.each(valuesForEachSeries, function(seriesIndex, seriesValues) {
         var jSeriesGroup = $j('g.highcharts-series.highcharts-series-' + seriesIndex + '.highcharts-tracker');
@@ -136,6 +157,10 @@ function calculateAndDrawConfidenceIntervals() {
             //console.log('Found series', jSeriesGroup.get(0), 'with values', seriesValues, 'and intervals', confidenceIntervals);
         drawConfidenceIntervals(confidenceIntervals, jSeriesGroup);
     });
+}
+
+function removePreviousConfidenceIntervals() {
+    $j('rect.confidence-interval').remove();
 }
 
 function getValuesForEachSeries() {
@@ -151,7 +176,6 @@ function getValuesForEachSeries() {
 }
 
 function getSeriesValues(jDataLabelsGroup) {
-    c = c || jDataLabelsGroup.find('tspan').slice(1).first();
     return jDataLabelsGroup.find('tspan').map(function(){return this.innerHTML}).toArray();
 }
 
@@ -161,8 +185,8 @@ function getConfidenceIntervals(seriesValues) {
         confidenceIntervals = [];
     for (var i = 1; i < seriesValues.length; i++) {
         var s = seriesValues[i],
-            // TODO: deal with 100 confidencePercentage with return NaN
-            confidenceInterval = wilsonInterval(s, n, confidencePercentage / 100);
+            // TODO: deal with 100 confidenceLevel with return NaN
+            confidenceInterval = wilsonInterval(s, n, confidenceLevel / 100);
         confidenceIntervals.push(confidenceInterval);
     }
     return confidenceIntervals;
@@ -186,15 +210,14 @@ function drawConfidenceIntervals(confidenceIntervals, jSeriesGroup) {
             x1 = centerX - width / 2,
             x2 = centerX + width / 2;
         newJRect.attr({
-            'x': x1,
-            'y': y1,
-            'width': x2 - x1,
-            'height': y2 - y1,
-            'fill': shadeColor2(jRect.attr('fill'), -0.2),
+            'class': 'confidence-interval',
+            x: x1,
+            y: y1,
+            width: x2 - x1,
+            height: y2 - y1,
+            fill: shadeColor2(jRect.attr('fill'), -0.2),
         });
         jRect.after(newJRect);
-        a = a || jRect;
-        b = b || newJRect;
     });
 }
 
