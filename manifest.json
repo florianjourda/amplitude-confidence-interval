@@ -14,13 +14,11 @@
     "background": {
         "scripts": [
             "lib/jquery/jquery-3.2.0.min.js",
-            "src/options/lib/store.js",
             "src/background/icon-manager.js",
             "src/background/background.js"
         ],
         "persistent": false
     },
-    "options_page": "src/options/index.html",
     "page_action": {},
     "permissions": [
         "contentSettings",
