@@ -20,14 +20,7 @@
         "persistent": false
     },
     "page_action": {},
-    "permissions": [
-        "contentSettings",
-        "http://l.facebook.com/*",
-        "https://www.eventbriteapi.com/*",
-        "https://www.eventbrite.com/*",
-        "http://www.eventbrite.com/*",
-        "https://analytics.amplitude.com/*"
-    ],
+    "permissions": [],
     "content_scripts": [
         {
             "matches": [
