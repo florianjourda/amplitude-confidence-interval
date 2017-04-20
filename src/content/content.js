@@ -5,8 +5,8 @@
  * In manifest.json, we declare that we want this code to run only on the pages matching "https://analytics.amplitude.com/*"
  */
 
-// Matches '100% (107 of 107)', '11.2% (12 of 107)'
-var FUNNEL_CONVERSION_TEXT_REGEX = /^(\d+\.?\d?)% \((\d+) of (\d+)\)/,
+// Matches '100% (107 of 107)', '11.2% (12,011 of 107,123)'
+var FUNNEL_CONVERSION_TEXT_REGEX = /^(\d+\.?\d?)% \(([\d,]+) of ([\d,]+)\)/,
 // Matches '80', '80%', '80 %', '.8', '0.8'
     PERCENTAGE_INPUT_REGEX = /^(\d+(\.\d+)?|\.\d+)\s*%?$/,
     confidenceLevel,
@@ -81,8 +81,8 @@ function updateFunnelConversionPopupText(jB) {
     matches = jB.text().match(FUNNEL_CONVERSION_TEXT_REGEX)
     var firstLine = matches[0],
         percent = parseFloat(matches[1]),
-        s = parseInt(matches[2], 10),
-        n = parseInt(matches[3], 10),
+        s = parseIntWithComma(matches[2]),
+        n = parseIntWithComma(matches[3]),
         confidenceInterval = wilsonInterval(s, n, confidenceLevel / 100),
         lowerBound = decimalRound(confidenceInterval.low * 100, 1),
         higherBound = decimalRound(confidenceInterval.high * 100, 1);
@@ -173,7 +173,14 @@ function getValuesForEachSeries() {
 }
 
 function getSeriesValues(jDataLabelsGroup) {
-    return jDataLabelsGroup.find('tspan').map(function(){return this.innerHTML}).toArray();
+    return jDataLabelsGroup.find('tspan').map(function(){
+        return parseIntWithComma(this.innerHTML);
+    }).toArray();
+}
+
+// Converts '10,203' to 10203
+function parseIntWithComma(numberAsString) {
+    return parseInt(numberAsString.replace(',',''), 10);
 }
 
 function getConfidenceIntervals(seriesValues) {
