@@ -32,12 +32,11 @@ $j(function() {
     $j('body').bind('DOMNodeInserted', function(e) {
         var tagName = e.target.tagName;
 
-        // Check if popup with funnel conversion text was displayed
+        // Check if tooltip with funnel conversion text was displayed
         if (tagName === 'DIV') {
-            // TODO: do not do this on the first step of the funnel
             var jB = $j(e.target).find('b');
-            if (jB.length && isFunnelConversionPopupText(jB)) {
-                updateAndKeepUpdatedFunnelConversionPopupText(jB);
+            if (jB.length && isFunnelConversionTooltipText(jB)) {
+                updateAndKeepUpdatedFunnelConversionTooltipText(jB);
             }
         }
 
@@ -58,11 +57,7 @@ function isSeriesGroup(element) {
     return $j(element).is('g.highcharts-series');
 }
 
-function isFunnelConversionPopupText(jB) {
-    return !!jB.text().match(FUNNEL_CONVERSION_TEXT_REGEX);
-}
-
-function updateAndKeepUpdatedFunnelConversionPopupText(jB) {
+function updateAndKeepUpdatedFunnelConversionTooltipText(jB) {
     // We listen to future changes in the text to update it again
     var DOMSubtreeModifiedHandler;
     DOMSubtreeModifiedHandler = function() {
@@ -70,14 +65,19 @@ function updateAndKeepUpdatedFunnelConversionPopupText(jB) {
         // Avoid infinite recursion of subtree modification by doing the modification after
         // the event listener really has the time to be removed.
         setTimeout(function() {
-            updateFunnelConversionPopupText(jB);
+            updateFunnelConversionTooltipText(jB);
             jB.on('DOMSubtreeModified', DOMSubtreeModifiedHandler);
         }, 1);
     }
     DOMSubtreeModifiedHandler();
 }
 
-function updateFunnelConversionPopupText(jB) {
+function updateFunnelConversionTooltipText(jB) {
+    // No confidence interval has to be drawn for the base step of funnel (100% base).
+    if (IsTooltipOnFunnelBaseStep(jB)) {
+        return;
+    }
+
     matches = jB.text().match(FUNNEL_CONVERSION_TEXT_REGEX)
     var firstLine = matches[0],
         percent = parseFloat(matches[1]),
@@ -92,11 +92,26 @@ function updateFunnelConversionPopupText(jB) {
     jB.find('a').on('click', function(e) {
         confidenceLevel = promptConfidenceLevel();
         storeConfidenceLevel(confidenceLevel);
-        updateFunnelConversionPopupText(jB);
+        updateFunnelConversionTooltipText(jB);
         calculateAndDrawConfidenceIntervals();
         e.preventDefault();
     });
     return true;
+}
+
+/**
+ * Tells if the given bold text is part of the tooltip that appears when the mouse
+ * is over one of the steps.
+ */
+function isFunnelConversionTooltipText(jB) {
+    return !!jB.text().match(FUNNEL_CONVERSION_TEXT_REGEX);
+}
+
+function IsTooltipOnFunnelBaseStep(jB) {
+    // The first tooltip doesn't have a div telling "Average 12s Since Last Step (Median 8s)"
+    // TODO: make this check less brittle
+    var divWithAverage = jB.parent().parent().next();
+    return divWithAverage.length === 0;
 }
 
 function promptConfidenceLevel() {
