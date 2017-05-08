@@ -163,12 +163,43 @@ function calculateAndDrawConfidenceIntervals() {
     console.log('calculateAndDrawConfidenceIntervals');
     removePreviousConfidenceIntervals();
     valuesForEachSeries = getValuesForEachSeries();
+    var seriesCount = 0,
+        stepsCount;
     $j.each(valuesForEachSeries, function(seriesIndex, seriesValues) {
         var jSeriesGroup = $j('g.highcharts-series.highcharts-series-' + seriesIndex + '.highcharts-tracker');
             confidenceIntervals = getConfidenceIntervals(seriesValues),
             //console.log('Found series', jSeriesGroup.get(0), 'with values', seriesValues, 'and intervals', confidenceIntervals);
         drawConfidenceIntervals(confidenceIntervals, jSeriesGroup);
+        seriesCount ++;
+        stepsCount = seriesValues.length;
     });
+
+    // Add a star to best variant of each step if there is one.
+    if (seriesCount > 1) {
+        // Multiple variants are being displayes at once (A/B testing) so we will
+        // pick the best variant for each step.
+        console.log('valuesForEachSeries:', valuesForEachSeries);
+
+        // The first step is the base reference step so we start stepIndex at 1 and not 0;
+        for (var stepIndex = 1; stepIndex < stepsCount; stepIndex++) {
+            // Create a new test result
+            var confidence = new Confidence();
+            $j.each(valuesForEachSeries, function(seriesIndex, seriesValues) {
+                // Add variant results
+                confidence.addVariant({
+                    id: seriesIndex,
+                    name: 'Variant ' + seriesIndex,
+                    conversionCount: seriesValues[stepIndex],
+                    eventCount: seriesValues[0], // base reference step
+                });
+            });
+            confidenceResults = confidence.getMarascuilloResult();
+            console.log(stepIndex, confidenceResults);
+            if (confidenceResults.hasWinner) {
+                addStarToDataLabel(confidenceResults.winnerID, stepIndex);
+            }
+        }
+    }
 }
 
 function removePreviousConfidenceIntervals() {
@@ -196,6 +227,16 @@ function getSeriesValues(jDataLabelsGroup) {
 // Converts '10,203' to 10203
 function parseIntWithComma(numberAsString) {
     return parseInt(numberAsString.replace(',',''), 10);
+}
+
+/**
+ * Write additional text in the label that shows the number of conversion in the given
+ * series and step.
+ */
+function addStarToDataLabel(seriesIndex, stepIndex, html) {
+    var jDataLabelsGroup = $j('g.highcharts-data-labels.highcharts-tracker.highcharts-series-' + seriesIndex),
+        jTSpan = jDataLabelsGroup.children(':nth-child(' + (stepIndex + 1) + ')').find('tspan');
+    jTSpan.text(jTSpan.text() + ' ⭐');
 }
 
 function getConfidenceIntervals(seriesValues) {

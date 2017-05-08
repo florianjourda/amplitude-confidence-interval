@@ -1,6 +1,6 @@
 {
     "name": "Confidence Interval on Amplitude Funnels",
-    "version": "0.0.1",
+    "version": "0.0.3",
     "manifest_version": 2,
     "description": "Draw confidence intervals on funnels in Amplitude",
     "homepage_url": "http://amplitude.com",
@@ -24,6 +24,7 @@
                 "https://analytics.amplitude.com/*"
             ],
             "js": [
+                "lib/confidence/confidence.js",
                 "lib/jquery/jquery-3.2.0.min.js",
                 "lib/wilson-interval/wilson-interval.js",
                 "src/content/content.js"
